@@ -117,21 +117,38 @@ export default function OrdersPage() {
 
   const handleAddOrder = useCallback(async () => {
     try {
-      const newOrder = {
-        total_amount: parseFloat(newOrderTotal),
-        status: newOrderStatus,
-        created_at: new Date().toISOString().split('T')[0], // Current created_at in YYYY-MM-DD format
-      };
-      const response = await fetch("/api/orders", {
-        method: "POST",
+      const customerRes = await fetch('/api/customers', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: newOrderCustomerName }),
+      });
+
+      if (!customerRes.ok) {
+        throw new Error('Error creating customer');
+      }
+
+      const customer = await customerRes.json();
+
+      const newOrder = {
+        customerId: customer.id,
+        total: parseFloat(newOrderTotal),
+        status: newOrderStatus,
+        created_at: new Date().toISOString().split('T')[0],
+        products: [],
+      };
+
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(newOrder),
       });
 
       if (!response.ok) {
-        throw new Error("Error creating order");
+        throw new Error('Error creating order');
       }
 
       const createdOrder = await response.json();
@@ -141,7 +158,7 @@ export default function OrdersPage() {
     } catch (error) {
       console.error(error);
     }
-  }, [newOrderTotal, newOrderStatus, orders]);
+  }, [newOrderCustomerName, newOrderTotal, newOrderStatus, orders]);
 
   const handleEditOrder = useCallback(async () => {
     if (!selectedOrderId) return;
