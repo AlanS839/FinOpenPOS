@@ -1,6 +1,15 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
+
+const productSchema = z.object({
+  name: z.string(),
+  description: z.string().optional().nullable(),
+  price: z.coerce.number(),
+  in_stock: z.coerce.number().int(),
+  category: z.string().optional().nullable(),
+})
 
 export async function GET(request: Request) {
   const supabase = createClient();
@@ -32,7 +41,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const newProduct = await request.json();
+  const body = await request.json();
+  const parsed = productSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+  }
+  const newProduct = parsed.data;
 
   const { data, error } = await supabase
     .from('products')
