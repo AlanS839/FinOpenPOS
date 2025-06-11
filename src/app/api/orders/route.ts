@@ -4,13 +4,15 @@ import { z } from 'zod'
 
 const orderSchema = z.object({
   customerId: z.coerce.number(),
-  paymentMethodId: z.coerce.number(),
+  paymentMethodId: z.coerce.number().optional(),
   total: z.coerce.number(),
+  status: z.enum(['completed', 'pending', 'cancelled']).optional(),
+  created_at: z.string().optional(),
   products: z.array(z.object({
     id: z.coerce.number(),
     quantity: z.coerce.number().int(),
     price: z.coerce.number(),
-  }))
+  })).optional().default([])
 })
 
 export async function GET(request: Request) {
@@ -58,7 +60,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
   }
-  const { customerId, paymentMethodId, products, total } = parsed.data;
+  const { customerId, paymentMethodId, products, total, status, created_at } = parsed.data;
 
   try {
     // Insert the order
@@ -68,7 +70,8 @@ export async function POST(request: Request) {
         customer_id: customerId,
         total_amount: total,
         user_uid: user.id,
-        status: 'completed'
+        status: status ?? 'completed',
+        ...(created_at ? { created_at } : {})
       })
       .select('*, customer:customers(name)')
       .single();
@@ -85,35 +88,39 @@ export async function POST(request: Request) {
       price: product.price
     }));
 
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(orderItems);
+    if (orderItems.length > 0) {
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
 
-    if (itemsError) {
-      // If there's an error inserting order items, delete the order
-      await supabase.from('orders').delete().eq('id', orderData.id);
-      throw itemsError;
+      if (itemsError) {
+        await supabase.from('orders').delete().eq('id', orderData.id);
+        throw itemsError;
+      }
     }
 
     // Insert the transaction record
-    const { error: transactionError } = await supabase
-      .from('transactions')
-      .insert({
-        order_id: orderData.id,
-        payment_method_id: paymentMethodId,
-        amount: total,
-        user_uid: user.id,
-        status: 'completed',
-        category: 'selling',
-        type: 'income',
-        description: `Payment for order #${orderData.id}`
-      });
+    if (paymentMethodId) {
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          order_id: orderData.id,
+          payment_method_id: paymentMethodId,
+          amount: total,
+          user_uid: user.id,
+          status: 'completed',
+          category: 'selling',
+          type: 'income',
+          description: `Payment for order #${orderData.id}`
+        });
 
-    if (transactionError) {
-      // If there's an error inserting the transaction, delete the order and order items
-      await supabase.from('orders').delete().eq('id', orderData.id);
-      await supabase.from('order_items').delete().eq('order_id', orderData.id);
-      throw transactionError;
+      if (transactionError) {
+        await supabase.from('orders').delete().eq('id', orderData.id);
+        if (orderItems.length > 0) {
+          await supabase.from('order_items').delete().eq('order_id', orderData.id);
+        }
+        throw transactionError;
+      }
     }
 
     return NextResponse.json(orderData);
