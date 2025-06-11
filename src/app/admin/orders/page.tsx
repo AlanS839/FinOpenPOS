@@ -14,7 +14,6 @@ import {
   SearchIcon,
   FilterIcon,
   FilePenIcon,
-  EyeIcon,
 } from "lucide-react";
 import {
   Table,
@@ -49,7 +48,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
-import Link from "next/link";
 
 type Order = {
   id: number;
@@ -332,12 +330,6 @@ export default function OrdersPage() {
                         <Trash2 className="w-4 h-4" />
                         <span className="sr-only">Delete</span>
                       </Button>
-                      <Link href={`/admin/orders/${order.id}`} prefetch={false}>
-                        <Button size="icon" variant="ghost">
-                          <EyeIcon className="w-4 h-4" />
-                          <span className="sr-only">View</span>
-                        </Button>
-                      </Link>
                     </div>
                   </TableCell>
                 </TableRow>
